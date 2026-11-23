@@ -27,17 +27,19 @@ export type OwnerStore = {
 export function useOwnerStore() {
   const [store, setStore] = useState<OwnerStore | null>(null);
   const [state, setState] = useState<"loading" | "none" | "ok">("loading");
+  const [error, setError] = useState<string>("");
   useEffect(() => {
     sb()
       .from("stores")
       .select("id, slug, name, description, policies, delivery, telegram_chat_id")
       .limit(1)
-      .then(({ data }) => {
+      .then(({ data, error }) => {
+        if (error) setError(`${error.message}${error.code ? ` (${error.code})` : ""}`);
         if (data && data[0]) {
           setStore(data[0] as OwnerStore);
           setState("ok");
         } else setState("none");
       });
   }, []);
-  return { store, state, setStore };
+  return { store, state, setStore, error };
 }

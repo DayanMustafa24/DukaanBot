@@ -31,7 +31,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
 function Gate({ children, path }: { children: React.ReactNode; path: string }) {
   const r = useRouter();
-  const { store, state, setStore } = useOwnerStore();
+  const { store, state, setStore, error } = useOwnerStore();
 
   async function logout() {
     await sb().auth.signOut();
@@ -46,6 +46,7 @@ function Gate({ children, path }: { children: React.ReactNode; path: string }) {
         <p className="text-black/70">
           Run <code className="bg-black/5 px-1 rounded">python scripts/link_owner.py your@email.com</code> from <code className="bg-black/5 px-1 rounded">backend/</code>, then reload.
         </p>
+        {error && <p className="text-red-700 break-words">Error from Supabase: {error}</p>}
         <button onClick={logout} className="underline text-brand">Sign out</button>
       </div>
     );

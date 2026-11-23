@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { sb } from "@/lib/supabase";
-import { useStore } from "../layout";
+import { useStore } from "@/components/StoreContext";
 
 export default function Settings() {
   const { store, setStore } = useStore();

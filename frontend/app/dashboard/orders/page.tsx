@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { rs } from "@/lib/api";
 import { sb } from "@/lib/supabase";
-import { useStore } from "../layout";
+import { useStore } from "@/components/StoreContext";
 
 type Item = { name: string; size: string; qty: number; line: number };
 type Order = {

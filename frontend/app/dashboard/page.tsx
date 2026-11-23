@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { rs } from "@/lib/api";
 import { sb } from "@/lib/supabase";
-import { useStore } from "./layout";
+import { useStore } from "@/components/StoreContext";
 
 type O = { total: number; status: string; created_at: string };
 type L = { thread_id: string; user_id: string; tokens_in: number; tokens_out: number };

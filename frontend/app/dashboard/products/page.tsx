@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { rs } from "@/lib/api";
 import { sb } from "@/lib/supabase";
-import { useStore } from "../layout";
+import { useStore } from "@/components/StoreContext";
 
 type V = { id: string; size: string; stock: number };
 type P = { id: string; sku: string; name: string; category: string; color: string; description: string; price_pkr: number; active: boolean; variants: V[] };

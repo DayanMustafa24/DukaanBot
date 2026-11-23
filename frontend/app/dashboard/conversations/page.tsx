@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import { sb } from "@/lib/supabase";
-import { useStore } from "../layout";
+import { useStore } from "@/components/StoreContext";
 
 type Row = {
   id: number; user_id: string; thread_id: string; role: string; content: string;

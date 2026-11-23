@@ -1,11 +1,9 @@
 "use client";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { createContext, useContext, useEffect, useState } from "react";
-import { OwnerStore, sb, useOwnerStore } from "@/lib/supabase";
-
-const Ctx = createContext<{ store: OwnerStore; setStore: (s: OwnerStore) => void } | null>(null);
-export const useStore = () => useContext(Ctx)!;
+import { useEffect, useState } from "react";
+import { StoreCtx } from "@/components/StoreContext";
+import { sb, useOwnerStore } from "@/lib/supabase";
 
 const NAV = [
   ["/dashboard", "Overview"],
@@ -53,7 +51,7 @@ function Gate({ children, path }: { children: React.ReactNode; path: string }) {
     );
 
   return (
-    <Ctx.Provider value={{ store, setStore }}>
+    <StoreCtx.Provider value={{ store, setStore }}>
       <div className="min-h-screen">
         <header className="bg-white border-b border-black/10">
           <div className="max-w-6xl mx-auto px-4 h-14 flex items-center gap-4">
@@ -72,6 +70,6 @@ function Gate({ children, path }: { children: React.ReactNode; path: string }) {
         </header>
         <main className="max-w-6xl mx-auto px-4 py-6">{children}</main>
       </div>
-    </Ctx.Provider>
+    </StoreCtx.Provider>
   );
 }

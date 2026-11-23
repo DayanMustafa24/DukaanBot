@@ -56,7 +56,7 @@ def main() -> None:
     rows, passed, total_in, total_out = [], 0, 0, 0
     tests = [t for t in spec["tests"] if not only or t["id"] in only]
     for t in tests:
-        fails, lat, tin, tout, last = [], 0, 0, 0, None
+        fails, lat, tin, tout, last, transcript = [], 0, 0, 0, None, []
         for i, turn in enumerate(t["turns"], start=1):
             body = {
                 "user_id": turn["user_id"] + suffix,
@@ -74,6 +74,7 @@ def main() -> None:
             tin += data.get("tokens", {}).get("in", 0)
             tout += data.get("tokens", {}).get("out", 0)
             last = data
+            transcript.append(f"  turn {i} tools={[t['name'] for t in data['tool_calls']]} reply={data['reply'][:300]!r}")
             for te in t["expect"].get("turn_expectations", []):
                 if te["turn"] == i:
                     fails += [f"turn {i}: {f}" for f in check(te, data["reply"], data["tool_calls"])]
@@ -86,6 +87,8 @@ def main() -> None:
         total_out += tout
         rows.append((t["id"], t["name"], t["category"], "PASS" if ok else "FAIL", lat, tin, tout, "; ".join(fails), (last or {}).get("reply", "")))
         print(f"{t['id']} {'PASS' if ok else 'FAIL'}  {lat} ms  {tin}/{tout} tok  {'; '.join(fails)}")
+        if not ok:
+            print("\n".join(transcript))
 
     lines = [
         "| Test | Category | Result | Latency (ms) | Tokens in/out |",

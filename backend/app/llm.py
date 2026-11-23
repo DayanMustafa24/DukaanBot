@@ -1,13 +1,16 @@
 import json
+import logging
 import re
+import time
 import uuid
 
 from langchain_core.messages import AIMessage, ToolMessage
 
 from . import config, usage
 
-_MAX_TOKENS = {"router": 80, "agent": 350, "curator": 150, "summary": 220}
+_MAX_TOKENS = {"router": 80, "agent": 350, "curator": 150, "summary": 220, "extract": 300}
 _cache: dict = {}
+log = logging.getLogger("llm")
 
 
 class FakeLLM:
@@ -84,6 +87,8 @@ def get_llm(role: str, tools=None):
 
 def llm_call(llm, messages, cfg):
     """Invoke and add the token usage to this turn's tracker."""
+    t0 = time.time()
     resp = llm.invoke(messages)
+    log.info("llm call %.2fs", time.time() - t0)
     usage.record(cfg, resp)
     return resp

@@ -14,8 +14,8 @@ from ..safety.injection import looks_like_injection, normalise
 from ..safety.output_guard import SAFE_REFUSAL, guard_reply
 from ..tools import ALLOWED, ORDER_TOOLS, SALES_TOOLS, TOOLS_BY_NAME
 from ..tools.notify import notify_seller
-from ..tools.orders import PAY_LABEL, OrderError, create_order
-from .prompts import CURATOR_PROMPT, ROUTER_PROMPT, SUMMARY_PROMPT, build_prompt
+from ..tools.orders import PAY_LABEL, OrderError, create_order, propose_order
+from .prompts import CURATOR_PROMPT, EXTRACT_PROMPT, ROUTER_PROMPT, SUMMARY_PROMPT, build_prompt
 from .state import AgentState
 
 log = logging.getLogger("graph")
@@ -161,7 +161,11 @@ def guard_router(state: AgentState, config: RunnableConfig):
             return {**patch, "route": "cancel", "intent": "cancel"}
         return {**patch, "route": "order", "intent": "order", "active_agent": "order"}
 
-    # 3) LLM intent classification (small, JSON only)
+    # 3) deterministic order hand-off: a phone number in the message means the customer is giving order details (skips the router LLM)
+    if re.search(r"\d{10,}", re.sub(r"[\s-]", "", msg)):
+        return {**patch, "route": "order", "intent": "order", "active_agent": "order"}
+
+    # 4) LLM intent classification (small, JSON only)
     prompt = ROUTER_PROMPT.format(
         mode=state.get("active_agent") or "sales",
         last_ai=last_ai_text(state)[:200].replace("\n", " "),
@@ -195,10 +199,66 @@ def refusal(state: AgentState, config: RunnableConfig):
     return {"messages": out}
 
 
+def _force_propose(msgs: list, config: RunnableConfig):
+    """Extract order details from the conversation with one small JSON call, then run propose_order ourselves."""
+    lines = []
+    for m in msgs[1:]:
+        t = text_of(m.content).strip()
+        if isinstance(m, HumanMessage) and t:
+            lines.append(f"Customer: {t[:400]}")
+        elif isinstance(m, AIMessage) and t:
+            lines.append(f"Assistant: {t[:300]}")
+        elif isinstance(m, ToolMessage):
+            lines.append(f"Tool {m.name}: {t[:300]}")
+    try:
+        resp = llm_call(get_llm("extract"), [HumanMessage(content=EXTRACT_PROMPT.format(chat="\n".join(lines[-14:])))], config)
+        d = parse_json(text_of(resp.content))
+        items = [
+            {"sku": str(i.get("sku", "")), "size": str(i.get("size") or "FREE"), "qty": int(i.get("qty") or 1)}
+            for i in (d.get("items") or []) if isinstance(i, dict) and i.get("sku")
+        ]
+        if not items:
+            return None
+        raw = propose_order.invoke(
+            {
+                "items": items,
+                "customer_name": str(d.get("customer_name") or ""),
+                "phone": str(d.get("phone") or ""),
+                "city": str(d.get("city") or ""),
+                "address": str(d.get("address") or ""),
+                "payment_method": str(d.get("payment_method") or "cod"),
+            },
+            config,
+        )
+        res = parse_json(raw if isinstance(raw, str) else getattr(raw, "content", ""))
+        return res if res.get("ok") else None
+    except Exception:
+        log.exception("forced propose failed")
+        return None
+
+
 def _agent(state: AgentState, config: RunnableConfig, kind: str):
     tools = SALES_TOOLS if kind == "sales" else ORDER_TOOLS
     msgs = [SystemMessage(content=build_prompt(kind, state))] + history_for_llm(state["messages"], settings.MAX_HISTORY_MSGS)
     resp = llm_call(get_llm("agent", tools), msgs, config)
+    # Safety net: if the order agent ends with plain text although the customer already gave a phone number and no order
+    # is proposed yet, extract the order deterministically and arm the YES gate ourselves (the LLM may not skip this step).
+    if (
+        kind == "order"
+        and not getattr(resp, "tool_calls", None)
+        and not state.get("pending_order")
+        and not any(t.get("name") == "propose_order" for t in state.get("tool_log", []))
+        and re.search(r"\d{10,}", re.sub(r"[\s-]", "", " ".join(text_of(m.content) for m in msgs if isinstance(m, HumanMessage))))
+    ):
+        res = _force_propose(msgs, config)
+        if res:
+            entry = {"name": "propose_order", "args": {"items": len(res["pending_order"]["items"])}, "result": "pending order stored"}
+            return {
+                "messages": [AIMessage(content=res["summary"])],
+                "pending_order": res["pending_order"],
+                "tool_log": list(state.get("tool_log", [])) + [entry],
+                "active_agent": kind,
+            }
     if getattr(resp, "tool_calls", None):
         if state.get("tool_rounds", 0) >= settings.MAX_TOOL_ROUNDS:
             resp = AIMessage(content="Sorry, I couldn't finish that. Could you rephrase what you need?")
